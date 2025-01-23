@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <termios.h>
 
-#define ROWS 30
+#define ROWS 30 
 #define COLS 80
-#define MAX_SNAKE_SIZE 20
+#define MAX_SNAKE_SIZE 100 
 #define MAX_FOOD 5
 
 void enable_raw_mode()
@@ -87,22 +87,36 @@ void render(struct Snake snake)
     printf("\n");
     for (int j = 0; j < COLS; j++) 
     {
-        GRID[0][j] = '-';
+        if (j % 2  == 0)
+        {
+            GRID[0][j] = '#';
+        }
+        else
+        {
+            GRID[0][j] = ' ';
+        }
     }
     GRID[0][COLS] = '\n';
     for (int i = 1; i < ROWS - 2; i++) 
     {
-        GRID[i][0] = '|';
+        GRID[i][0] = '#';
         for (int j = 1; j < COLS-1; j++)
         {
             GRID[i][j] = ' ';
         }
-        GRID[i][COLS-1] = '|';
+        GRID[i][COLS-1] = '#';
         GRID[i][COLS] = '\n';
     }
     for (int j = 0; j < COLS; j++) 
     {
-        GRID[ROWS - 1][j] = '-';
+        if (j % 2  == 0)
+        {
+            GRID[ROWS-1][j] = '#';
+        }
+        else
+        {
+            GRID[ROWS-1][j] = ' ';
+        }
     }
     GRID[ROWS-1][COLS] = '\n';
     // Insert the snake into the grid
@@ -138,23 +152,35 @@ void *get_input(void *ptr)
         { // the real value
             case 'w':
                 // code for arrow up
-                snake->vel.x = 0;
-                snake->vel.y = 1;
+                if (snake->vel.y == 0)
+                {
+                    snake->vel.x = 0;
+                    snake->vel.y = 1;
+                }
                 break;
             case 's':
                 // code for arrow down
-                snake->vel.x = 0;
-                snake->vel.y = -1;
+                if (snake->vel.y == 0)
+                {
+                    snake->vel.x = 0;
+                    snake->vel.y = -1;
+                }
                 break;
             case 'd':
                 // code for arrow right
-                snake->vel.x = 3;
-                snake->vel.y = 0;
+                if (snake->vel.x == 0)
+                {
+                    snake->vel.x = 1;
+                    snake->vel.y = 0;
+                }
                 break;
             case 'a':
                 // code for arrow left
-                snake->vel.x = -3;
-                snake->vel.y = 0;
+                if (snake->vel.x == 0)
+                {
+                    snake->vel.x = -1;
+                    snake->vel.y = 0;
+                }
                 break;
             case 'q':
                 // code for arrow left
@@ -170,45 +196,58 @@ void *get_input(void *ptr)
 
 void update_snake(struct Snake *snake)
 {
-    while (RUNNING)
+    for (int i = MAX_SNAKE_SIZE-1; i > 0; i--)
     {
-        for (int i = MAX_SNAKE_SIZE-1; i > 0; i--)
+        if (snake->body[i].x > -1 && snake->body[i].y > -1)
         {
-            if (snake->body[i].x > -1 && snake->body[i].y > -1)
+            if (i > 0)
             {
-                if (i > 0)
-                {
-                    snake->body[i].x = snake->body[i-1].x;
-                    snake->body[i].y = snake->body[i-1].y;
-                }
+                snake->body[i].x = snake->body[i-1].x;
+                snake->body[i].y = snake->body[i-1].y;
             }
         }
-        snake->body[0].x = snake->body[0].x + snake->vel.x;
-        snake->body[0].y = snake->body[0].y - snake->vel.y;
+    }
+    snake->body[0].x = snake->body[0].x + snake->vel.x;
+    snake->body[0].y = snake->body[0].y - snake->vel.y;
 
-        for (int i=0; i<MAX_FOOD; i++)
+    for (int i=0; i<MAX_FOOD; i++)
+    {
+        if (snake->body[0].x == FOOD[i].x && snake->body[0].y == FOOD[i].y)
         {
-            if (snake->body[0].x == FOOD[i].x && snake->body[0].y == FOOD[i].y)
+            for (int j=1; j<MAX_SNAKE_SIZE; j++)
             {
-                for (int j=1; j<MAX_SNAKE_SIZE; j++)
+                if (snake->body[j].x == -1 && snake->body[j].y == -1)
                 {
-                    if (snake->body[j].x == -1 && snake->body[j].y == -1)
-                    {
-                        snake->body[j].x = 1;
-                        snake->body[j].y = 1;
-                        break;
-                    }
+                    snake->body[j].x = 1;
+                    snake->body[j].y = 1;
+                    break;
                 }
-                FOOD[i].x = -1;
-                FOOD[i].y = -1;
             }
+            FOOD[i].x = -1;
+            FOOD[i].y = -1;
         }
+    }
 
-        if (snake->body[0].x > COLS || snake->body[0].x < 0 || snake->body[0].y > ROWS || snake->body[0].y < 0)
+    if (snake->body[0].x >= COLS || snake->body[0].x < 0 || snake->body[0].y > ROWS || snake->body[0].y < 0)
+    {
+        pthread_mutex_lock(&LOCK);
+        RUNNING = 0;
+        pthread_mutex_unlock(&LOCK);
+    }
+
+    for (int i=0; i<MAX_SNAKE_SIZE - 1; i++)
+    {
+        for (int j=i+1; j<MAX_SNAKE_SIZE; j++)
         {
-            pthread_mutex_lock(&LOCK);
-            RUNNING = 0;
-            pthread_mutex_unlock(&LOCK);
+            if (snake->body[i].x > -1 && snake->body[i].y > -1 && snake->body[j].x > -1 && snake->body[j].y > -1)
+            {
+                if (snake->body[i].x == snake->body[j].x && snake->body[i].y == snake->body[j].y)
+                {
+                    pthread_mutex_lock(&LOCK);
+                    RUNNING = 0;
+                    pthread_mutex_unlock(&LOCK);
+                }
+            }
         }
     }
 }
@@ -225,8 +264,8 @@ void main()
         snake.body[i].x = -1;
         snake.body[i].y = -1;
     }
-    snake.body[0].x = 0;
-    snake.body[0].y = 0;
+    snake.body[0].x = (int)COLS / 2;
+    snake.body[0].y = (int)ROWS / 2;
 
     for (int i=0; i<MAX_FOOD; i++)
     {
