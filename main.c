@@ -65,10 +65,6 @@ gen_ran:
         {
             goto gen_ran;
         }
-        else
-        {
-            goto exit;
-        }
     }
 exit:
     food.x = random_x;
@@ -79,11 +75,12 @@ exit:
         {
             FOOD[i].x = random_x;
             FOOD[i].y = random_y;
+            break;
         }
     }
 }
 
-void render(struct Snake snake, int gen_food)
+void render(struct Snake snake)
 {
     system("clear");
     // Clear the grid
@@ -116,15 +113,11 @@ void render(struct Snake snake, int gen_food)
             GRID[snake.body[i].y][snake.body[i].x] = snake.form;
         }
     }
-    if (gen_food)
+    for (int i=0; i<MAX_FOOD; i++)
     {
-        spawn_food(snake);
-        for (int i=0; i<MAX_FOOD; i++)
+        if (FOOD[i].x > -1 && FOOD[i].y > -1)
         {
-            if (FOOD[i].x > -1 && FOOD[i].y > -1)
-            {
-                GRID[FOOD[i].y][FOOD[i].x] = 'x';
-            }
+            GRID[FOOD[i].y][FOOD[i].x] = 'x';
         }
     }
     for (int i=0; i<ROWS; i++)
@@ -177,25 +170,46 @@ void *get_input(void *ptr)
 
 void update_snake(struct Snake *snake)
 {
-    for (int i = MAX_SNAKE_SIZE-1; i > 0; i--)
+    while (RUNNING)
     {
-        if (snake->body[i].x > -1 && snake->body[i].y > -1)
+        for (int i = MAX_SNAKE_SIZE-1; i > 0; i--)
         {
-            if (i > 0)
+            if (snake->body[i].x > -1 && snake->body[i].y > -1)
             {
-                snake->body[i].x = snake->body[i-1].x;
-                snake->body[i].y = snake->body[i-1].y;
+                if (i > 0)
+                {
+                    snake->body[i].x = snake->body[i-1].x;
+                    snake->body[i].y = snake->body[i-1].y;
+                }
             }
         }
-    }
-    snake->body[0].x = snake->body[0].x + snake->vel.x;
-    snake->body[0].y = snake->body[0].y - snake->vel.y;
+        snake->body[0].x = snake->body[0].x + snake->vel.x;
+        snake->body[0].y = snake->body[0].y - snake->vel.y;
 
-    if (snake->body[0].x > COLS || snake->body[0].x < 0 || snake->body[0].y > ROWS || snake->body[0].y < 0)
-    {
-        pthread_mutex_lock(&LOCK);
-        RUNNING = 0;
-        pthread_mutex_unlock(&LOCK);
+        for (int i=0; i<MAX_FOOD; i++)
+        {
+            if (snake->body[0].x == FOOD[i].x && snake->body[0].y == FOOD[i].y)
+            {
+                for (int j=1; j<MAX_SNAKE_SIZE; j++)
+                {
+                    if (snake->body[j].x == -1 && snake->body[j].y == -1)
+                    {
+                        snake->body[j].x = 1;
+                        snake->body[j].y = 1;
+                        break;
+                    }
+                }
+                FOOD[i].x = -1;
+                FOOD[i].y = -1;
+            }
+        }
+
+        if (snake->body[0].x > COLS || snake->body[0].x < 0 || snake->body[0].y > ROWS || snake->body[0].y < 0)
+        {
+            pthread_mutex_lock(&LOCK);
+            RUNNING = 0;
+            pthread_mutex_unlock(&LOCK);
+        }
     }
 }
 
@@ -230,13 +244,10 @@ void main()
     {
         if (food_counter == 0)
         {
-            render(snake, 1);
+            spawn_food(snake);
             food_counter = 50;
         }
-        else
-        {
-            render(snake, 0);
-        }
+        render(snake);
         update_snake(&snake);
         food_counter--;
         usleep(100000);
